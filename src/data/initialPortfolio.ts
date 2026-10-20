@@ -1,8 +1,12 @@
 import { Project, ServicePackage } from '../types/portfolio';
+import heroStudioImg from '../assets/images/hero_studio_showreel_1792465366310.jpg';
+import aboutWorkspaceImg from '../assets/images/about_director_workspace_1792465367666.jpg';
+import workCommercialImg from '../assets/images/work_brand_commercial_1792465366564.jpg';
+import workMotionImg from '../assets/images/work_motion_art_1792465366964.jpg';
 
-// Initial images created during image generation
-export const STUDIO_HERO_IMAGE = '/src/assets/images/hero_studio_showreel_1792465366310.jpg';
-export const ABOUT_WORKSPACE_IMAGE = '/src/assets/images/about_director_workspace_1792465367666.jpg';
+// Bundled images with Vite asset hashing support
+export const STUDIO_HERO_IMAGE = heroStudioImg;
+export const ABOUT_WORKSPACE_IMAGE = aboutWorkspaceImg;
 
 // 사용자 요청: 대표 작업물 2개 (네이버 쇼핑라이브 작업물 유지, 나머지 정리)
 export const INITIAL_PROJECTS: Project[] = [
@@ -13,11 +17,11 @@ export const INITIAL_PROJECTS: Project[] = [
     category: 'Short-form / YouTube',
     year: '2026',
     duration: '00:58',
-    thumbnailUrl: '/src/assets/images/work_brand_commercial_1792465366564.jpg',
+    thumbnailUrl: workCommercialImg,
     images: [
-      '/src/assets/images/work_brand_commercial_1792465366564.jpg',
-      '/src/assets/images/hero_studio_showreel_1792465366310.jpg',
-      '/src/assets/images/about_director_workspace_1792465367666.jpg'
+      workCommercialImg,
+      heroStudioImg,
+      aboutWorkspaceImg
     ],
     videoUrl: 'https://www.youtube.com/embed/5qap5aO4i9A',
     featured: true,
@@ -47,11 +51,11 @@ export const INITIAL_PROJECTS: Project[] = [
     category: 'Brand Film / CF',
     year: '2026',
     duration: '01:12',
-    thumbnailUrl: '/src/assets/images/work_motion_art_1792465366964.jpg',
+    thumbnailUrl: workMotionImg,
     images: [
-      '/src/assets/images/work_motion_art_1792465366964.jpg',
-      '/src/assets/images/hero_studio_showreel_1792465366310.jpg',
-      '/src/assets/images/about_director_workspace_1792465367666.jpg'
+      workMotionImg,
+      heroStudioImg,
+      aboutWorkspaceImg
     ],
     videoUrl: 'https://www.youtube.com/embed/ScMzIvxBSi4',
     featured: true,

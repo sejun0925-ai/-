@@ -24,34 +24,52 @@ export default function App() {
 
   useEffect(() => {
     // Initial load from storage
-    const loadedProjects = getStoredProjects();
-    setProjects(loadedProjects);
+    try {
+      const loadedProjects = getStoredProjects();
+      setProjects(loadedProjects);
+    } catch (e) {
+      console.error('Failed to load projects', e);
+    }
 
     // Check if admin was previously logged in during this session
-    const adminSession = sessionStorage.getItem('portfolio_admin_auth');
-    if (adminSession === 'true') {
-      setIsAdminLoggedIn(true);
+    try {
+      const adminSession = sessionStorage.getItem('portfolio_admin_auth');
+      if (adminSession === 'true') {
+        setIsAdminLoggedIn(true);
+      }
+    } catch (e) {
+      // Ignore storage restrictions in iframes
     }
   }, []);
 
   const handleSaveProjects = (updatedProjects: Project[]) => {
     setProjects(updatedProjects);
-    saveStoredProjects(updatedProjects);
+    try {
+      saveStoredProjects(updatedProjects);
+    } catch (e) {
+      console.error('Failed to save projects', e);
+    }
   };
 
   const handleAdminLogin = () => {
     setIsAdminLoggedIn(true);
-    sessionStorage.setItem('portfolio_admin_auth', 'true');
+    try {
+      sessionStorage.setItem('portfolio_admin_auth', 'true');
+    } catch (e) {}
   };
 
   const handleAdminLogout = () => {
     setIsAdminLoggedIn(false);
-    sessionStorage.removeItem('portfolio_admin_auth');
+    try {
+      sessionStorage.removeItem('portfolio_admin_auth');
+    } catch (e) {}
   };
 
   const handleNavigate = (tab: string) => {
     setCurrentTab(tab);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {}
   };
 
   return (
@@ -112,9 +130,6 @@ export default function App() {
         onLogout={handleAdminLogout}
         projects={projects}
         onSaveProjects={handleSaveProjects}
-        inquiries={[]}
-        onUpdateInquiryStatus={() => {}}
-        onDeleteInquiry={() => {}}
         onSelectProjectPreview={(p) => {
           setIsAdminModalOpen(false);
           setSelectedProject(p);
