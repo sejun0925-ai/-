@@ -1,26 +1,32 @@
 import { Project, ServicePackage } from '../types/portfolio';
+import heroStudioImg from '../assets/images/hero_studio_showreel_1792465366310.jpg';
+import aboutWorkspaceImg from '../assets/images/about_director_workspace_1792465367666.jpg';
+import workCommercialImg from '../assets/images/work_brand_commercial_1792465366564.jpg';
+import workMotionImg from '../assets/images/work_motion_art_1792465366964.jpg';
 
-// Local direct assets provided by user
-export const STUDIO_HERO_IMAGE = '/assets/aistudio/___26c72ec4.png';
-export const ABOUT_WORKSPACE_IMAGE = '/assets/aistudio/_______1_7b6e2e73.png';
+// Bundled images with Vite asset hashing support
+export const STUDIO_HERO_IMAGE = heroStudioImg;
+export const ABOUT_WORKSPACE_IMAGE = aboutWorkspaceImg;
 
-// 사용자 요청: 대표 작업물 2개 (네이버 쇼핑라이브 작업물 + 제공해주신 실제 사진 적용)
+// 사용자 요청: 대표 작업물 2개 (네이버 쇼핑라이브 작업물 유지, 나머지 정리)
 export const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-naver-live',
-    title: '네이버 쇼핑라이브 — 더미식 숏클립 하이라이트 편집',
+    title: '네이버 쇼핑라이브 & 숏츠 하이라이트 편집',
     client: '네이버 1784 라이브커머스제작팀',
     category: 'Short-form / YouTube',
     year: '2026',
-    duration: '00:59',
-    thumbnailUrl: '/assets/aistudio/_______1_7b6e2e73.png',
+    duration: '00:58',
+    thumbnailUrl: workCommercialImg,
     images: [
-      '/assets/aistudio/_______1_7b6e2e73.png'
+      workCommercialImg,
+      heroStudioImg,
+      aboutWorkspaceImg
     ],
     videoUrl: 'https://www.youtube.com/embed/5qap5aO4i9A',
     featured: true,
     order: 1,
-    summary: '네이버 1784 라이브커머스 방송 현장 보조 및 더미식 비빔면 & 만두 숏클립 하이라이트 편집',
+    summary: '네이버 1784 라이브커머스 방송 현장 보조 및 모바일 숏폼(숏츠) 하이라이트 편집',
     purpose: '실시간 라이브 방송 소스에서 즉각적인 구매 전환과 시청자 반응을 이끌어내는 핵심 세일즈 구간을 선별하고, 첫 3초 이탈을 방어하는 다이내믹한 훅(Hook) 인트로와 모바일 최적화 자막으로 도달률을 극대화했습니다.',
     directRole: [
       '라이브 방송 현장 보조 및 소스 아카이빙',
@@ -39,35 +45,37 @@ export const INITIAL_PROJECTS: Project[] = [
     }
   },
   {
-    id: 'proj-quanta-x',
-    title: 'QUANTA-X — 시네마틱 브랜드 필름 & 3D 에디토리얼',
-    client: 'QUANTA-X / 한국공학대학교 산업디자인',
+    id: 'proj-kpu-design',
+    title: '한국공학대 산업디자인 — 3D 제품 조형 & 브랜드 필름',
+    client: '한국공학대학교 산업디자인공학부',
     category: 'Brand Film / CF',
     year: '2026',
     duration: '01:12',
-    thumbnailUrl: '/assets/aistudio/___26c72ec4.png',
+    thumbnailUrl: workMotionImg,
     images: [
-      '/assets/aistudio/___26c72ec4.png'
+      workMotionImg,
+      heroStudioImg,
+      aboutWorkspaceImg
     ],
     videoUrl: 'https://www.youtube.com/embed/ScMzIvxBSi4',
     featured: true,
     order: 2,
-    summary: '자연의 빛과 공간감, 산업디자인 조형미를 결합한 QUANTA-X 하이엔드 시네마틱 브랜드 필름',
-    purpose: '깊은 숲 속의 빛과 유기적 텍스처, 그리고 현대적 타이포그래피를 조화롭게 융합하여 브랜드의 정체성과 감각적인 공간감을 영상 언어로 완성했습니다.',
+    summary: '산업디자인 조형 원리와 그리드 시스템을 기반으로 완성한 하이엔드 3D 시네마틱 필름',
+    purpose: '제품 디자인의 곡선미, 금속과 글라스의 물질감, 그리고 공간 투시도를 영상 언어로 정교하게 구현하여 산업디자인 전공의 감각과 영상 편집의 구조적 완성도를 증명하고자 기획되었습니다.',
     directRole: [
-      '시네마틱 자연 다큐멘터리 씬 앵글 연출 & 컷 편집',
-      '스위스 미니멀 인터내셔널 그리드 타이포그래피 레이아웃',
-      '3D 조형 및 투시도 공간 설계 연출',
-      '시네마틱 톤 매핑 & 컬러 그레이딩'
+      '3D 제품 조형 모델링 & 투시도 씬 앵글 연출',
+      'A-Roll / B-Roll 리듬감 있는 시퀀스 컷 편집',
+      '스위스 인터내셔널 그리드 타이포그래피 레이아웃',
+      '시네마틱 톤 매핑 및 색보정'
     ],
-    process: '빛의 산란과 나무 줄기의 깊이감이 드러나는 숲의 풍경에 강렬한 레드 세리프 타이포그래피 QUANTA-X를 대비 배치하여 시각적 긴장감을 부여했습니다. 퓨전360과 스케치업의 3D 공간 원리를 영상 프레임 구성에 접목했습니다.',
+    process: '퓨전360과 스케치업으로 설계된 제품의 3D 조형 데이터를 기반으로 빛의 반사각과 카메라 동선을 설계했습니다. 음악의 템포와 컷 전환을 완벽히 일치시켜 감각적이고 구조적인 미니멀 에디토리얼 무드를 연출했습니다.',
     tools: ['프리미어프로', '포토샵', '일러스트', '퓨전360', '스케치업'],
-    beforeAfterNote: '수정 전: 평이한 자연 풍경 나열 → 수정 후: 조도와 피사계 심도를 살린 2.07:1 와이드 시네마틱 프레이밍과 타이포그래피 조화로 브랜드 필름 완성도 극대화.',
-    deliverables: '4K UHD Cinema Master (2.39:1 / 16:9), ProRes 422HQ',
+    beforeAfterNote: '단순한 3D 턴테이블 회전 영상에서 벗어나, 제품의 파팅 라인과 비례를 클로즈업하는 시네마틱 매치컷으로 브랜드 가치를 격상시켰습니다.',
+    deliverables: '4K UHD Cinema Master (16:9), ProRes 422HQ',
     clientReview: {
-      quote: '산업디자인의 공간 감각과 시네마틱 영상의 미장센이 완벽히 결합된 인상적인 작품입니다.',
-      author: 'QUANTA-X Project',
-      role: 'Creative Direction'
+      quote: '산업디자인의 엄밀한 비례 감각과 영상의 시각적 쾌감이 공존하는 수준 높은 졸업 대표작입니다.',
+      author: '한국공학대학교',
+      role: '산업디자인공학부'
     }
   }
 ];
@@ -136,5 +144,47 @@ export const SERVICE_PACKAGES: ServicePackage[] = [
       '트렌디한 비트 컷팅 및 템포 조율',
       '모바일 세로화면 리센터링'
     ]
+  }
+];
+
+export const WORK_PROCESS_STEPS = [
+  {
+    step: '01',
+    title: '기획 분석 & 소통',
+    desc: '고객의 목적, 타깃 오디언스, 레퍼런스를 분석하여 프로젝트의 방향성과 무드보드를 합의합니다.'
+  },
+  {
+    step: '02',
+    title: '러프 컷 (가편집)',
+    desc: '스토리라인과 흐름의 뼈대를 잡는 가편집본을 제작하여 전체적인 호흡과 핵심 구성을 1차 확인합니다.'
+  },
+  {
+    step: '03',
+    title: '정밀 편집 & 색보정/자막',
+    desc: '세부 B-Roll 인서트, 트랜지션, 색보정, 타이포그래피 자막을 입혀 완성도를 끌어올립니다.'
+  },
+  {
+    step: '04',
+    title: '최종 검수 & 마스터 납품',
+    desc: '고객 피드백을 반영한 2차 수정 후 플랫폼 규격(4K, 세로형, 비압축 마스터 등)에 맞추어 클라우드 링크로 최종 납품합니다.'
+  }
+];
+
+export const FAQ_ITEMS = [
+  {
+    q: '촬영도 함께 진행하시나요, 아니면 편집만 맡기나요?',
+    a: '기본적으로 고객님께서 보유하신 촬영 소스를 기반으로 한 고품질 편집, 색보정, 2D/3D 그래픽, 자막 디자인을 전문으로 합니다. 필요 시 수도권 내 현장 인터뷰 및 숏폼 촬영 지원도 사전 협의 후 연계 가능합니다.'
+  },
+  {
+    q: '수정은 몇 회까지 가능하고, 추가 수정 정책은 어떻게 되나요?',
+    a: '모든 프로젝트는 기본 2회의 정밀 수정(러프컷 피드백 1회 + 디테일/자막 수정 1회)이 포함되어 있습니다. 초기 기획의 틀을 벗어난 전면 재촬영/재편집이 아닌 이상 자막, 미세 컷 타이밍은 만족하실 때까지 유연하게 소통하며 조율해 드립니다.'
+  },
+  {
+    q: '급한 숏츠나 라이브커머스 하이라이트 작업도 빠른 납품이 가능한가요?',
+    a: '네, 일정이 촉박한 릴스/숏츠나 긴급 발표 클립의 경우 Fast-Track 옵션을 통해 24-48시간 내 신속 납품이 가능합니다. 이메일(helicat123@naver.com) 또는 전화(+82 10 3374 5355)로 사전 문의 시 일정을 협의해 주세요.'
+  },
+  {
+    q: '산업디자인 공학 전공이 영상 제작에 어떤 도움이 되나요?',
+    a: '단순히 컷을 자르고 붙이는 작업을 넘어, 제품의 형태(Form), 공간감, 빛의 반사, 타이포그래피의 비례와 그리드를 구조적으로 이해하고 영상을 설계합니다. 시각적 균형감과 미니멀한 감각으로 브랜드의 가치를 시각적으로 증명합니다.'
   }
 ];
