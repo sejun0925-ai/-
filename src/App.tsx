@@ -49,6 +49,12 @@ export default function App() {
     } catch (e) {
       console.error('Failed to save projects', e);
     }
+    if (selectedProject) {
+      const refreshed = updatedProjects.find((p) => p.id === selectedProject.id);
+      if (refreshed) {
+        setSelectedProject(refreshed);
+      }
+    }
   };
 
   const handleAdminLogin = () => {

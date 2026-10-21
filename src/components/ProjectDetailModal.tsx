@@ -35,11 +35,21 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({
   if (!project) return null;
 
   // Resolve all images for this project (multiple images support)
-  const galleryImages: string[] = (project.images && project.images.length > 0)
-    ? project.images
-    : (project.thumbnailUrl ? [project.thumbnailUrl] : ['/src/assets/images/hero_studio_showreel_1792465366310.jpg']);
+  const galleryImages: string[] = (() => {
+    const list = project.images && project.images.length > 0 ? [...project.images] : [];
+    if (project.thumbnailUrl && !list.includes(project.thumbnailUrl)) {
+      list.unshift(project.thumbnailUrl);
+    } else if (project.thumbnailUrl && list.includes(project.thumbnailUrl)) {
+      const idx = list.indexOf(project.thumbnailUrl);
+      if (idx > 0) {
+        list.splice(idx, 1);
+        list.unshift(project.thumbnailUrl);
+      }
+    }
+    return list.length > 0 ? list : (project.thumbnailUrl ? [project.thumbnailUrl] : []);
+  })();
 
-  const currentDisplayedImage = galleryImages[activeImageIndex] || galleryImages[0];
+  const currentDisplayedImage = galleryImages[activeImageIndex] || project.thumbnailUrl || galleryImages[0];
 
   const handlePrevImage = (e: React.MouseEvent) => {
     e.stopPropagation();

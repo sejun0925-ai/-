@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { X, Lock, Plus, Trash2, Edit3, RotateCcw, Check, Film, Eye, UploadCloud, Star, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { X, Lock, Plus, Trash2, Edit3, RotateCcw, Check, Film, Eye, UploadCloud, Star, Image as ImageIcon, Camera, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Project, ContactInquiry } from '../types/portfolio';
 import { resetStoredProjects } from '../utils/storage';
+import { compressImageFile, compressMultipleImages } from '../utils/imageHelper';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -47,9 +48,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [editingProject, setEditingProject] = useState<Partial<Project> | null>(null);
   const [isEditingNew, setIsEditingNew] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [manualImageUrl, setManualImageUrl] = useState('');
 
+  // Quick upload for project list row
+  const [quickUploadTargetProjectId, setQuickUploadTargetProjectId] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const quickFileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
 
@@ -66,7 +72,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
-    setTimeout(() => setStatusMessage(''), 3000);
+    setTimeout(() => setStatusMessage(''), 4000);
   };
 
   const handleOpenAddProject = () => {
@@ -82,7 +88,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       thumbnailUrl: '',
       images: [],
       videoUrl: '',
-      featured: false,
+      featured: true,
       order: projects.length + 1,
       summary: '',
       purpose: '',
@@ -94,54 +100,91 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     });
   };
 
-  // Handle local files upload from computer (multiple images support)
-  const handleFilesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 1. FAST ONE-CLICK IMAGE REPLACE FROM PROJECT LIST
+  const handleTriggerQuickUpload = (projectId: string) => {
+    setQuickUploadTargetProjectId(projectId);
+    quickFileInputRef.current?.click();
+  };
+
+  const handleQuickImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !quickUploadTargetProjectId) return;
+
+    setIsProcessingImages(true);
+    try {
+      const optimizedDataUrl = await compressImageFile(file, 1920, 0.85);
+      const target = projects.find((p) => p.id === quickUploadTargetProjectId);
+      if (target) {
+        const updatedImages = [optimizedDataUrl, ...(target.images || []).filter((img) => img !== target.thumbnailUrl)];
+        const updatedProject: Project = {
+          ...target,
+          thumbnailUrl: optimizedDataUrl,
+          images: updatedImages,
+        };
+        const updatedList = projects.map((p) => (p.id === target.id ? updatedProject : p));
+        onSaveProjects(updatedList);
+        showStatus(`'${target.title}'의 대표 사진이 즉시 포트폴리오에 반영되었습니다!`);
+      }
+    } catch (err) {
+      console.error('Image compression error:', err);
+      alert('이미지 처리 중 오류가 발생했습니다. 다른 이미지 파일을 선택해 주세요.');
+    } finally {
+      setIsProcessingImages(false);
+      setQuickUploadTargetProjectId(null);
+      e.target.value = '';
+    }
+  };
+
+  // 2. MULTI-IMAGE UPLOAD FROM COMPUTER INSIDE EDIT FORM
+  const handleFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !editingProject) return;
 
-    const fileList = Array.from(files);
-    let loadedCount = 0;
-    const newImages: string[] = [];
+    setIsProcessingImages(true);
+    try {
+      const fileList = Array.from(files);
+      const compressedUrls = await compressMultipleImages(fileList);
+      const validUrls = compressedUrls.filter(Boolean);
 
-    fileList.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          newImages.push(result);
-        }
-        loadedCount++;
-        if (loadedCount === fileList.length && editingProject) {
-          const currentImages = editingProject.images || [];
-          const updatedImages = [...currentImages, ...newImages];
-          // Default thumbnail to first image if none chosen
-          const currentThumb = editingProject.thumbnailUrl || updatedImages[0];
-          setEditingProject({
-            ...editingProject,
-            images: updatedImages,
-            thumbnailUrl: currentThumb,
-          });
-          showStatus(`내 컴퓨터에서 ${newImages.length}장의 이미지가 성공적으로 추가되었습니다.`);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      if (validUrls.length === 0) {
+        alert('올바른 이미지 파일을 선택해 주세요.');
+        return;
+      }
 
-    e.target.value = '';
+      // Automatically set the FIRST uploaded image as the active cover thumbnail!
+      const newCoverImage = validUrls[0];
+      const currentImages = editingProject.images || [];
+      // Prepend new images to the front so they appear immediately in gallery
+      const updatedImages = [...validUrls, ...currentImages];
+
+      setEditingProject({
+        ...editingProject,
+        images: updatedImages,
+        thumbnailUrl: newCoverImage, // CRITICAL FIX: Update thumbnailUrl to newly uploaded image immediately!
+      });
+
+      showStatus(`내 컴퓨터에서 ${validUrls.length}장의 사진이 추가되었으며, 첫 번째 사진이 '대표 썸네일'로 자동 지정되었습니다! (저장 완료를 누르면 웹에 최종 반영됩니다)`);
+    } catch (err) {
+      console.error('Failed to process uploaded images:', err);
+      alert('이미지 파일 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsProcessingImages(false);
+      e.target.value = '';
+    }
   };
 
   const handleAddManualImage = () => {
     if (!manualImageUrl.trim() || !editingProject) return;
     const url = manualImageUrl.trim();
     const currentImages = editingProject.images || [];
-    const updatedImages = [...currentImages, url];
+    const updatedImages = [url, ...currentImages];
     setEditingProject({
       ...editingProject,
       images: updatedImages,
-      thumbnailUrl: editingProject.thumbnailUrl || url,
+      thumbnailUrl: url, // Automatically set as thumbnail
     });
     setManualImageUrl('');
-    showStatus('이미지 URL이 추가되었습니다.');
+    showStatus('이미지 URL이 추가되고 대표 썸네일로 지정되었습니다.');
   };
 
   const handleSetCoverImage = (imgUrl: string) => {
@@ -150,7 +193,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       ...editingProject,
       thumbnailUrl: imgUrl,
     });
-    showStatus('대표 썸네일로 지정되었습니다.');
+    showStatus('선택한 이미지가 대표 썸네일로 지정되었습니다.');
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
@@ -169,6 +212,23 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       images: updatedImages,
       thumbnailUrl: newThumbnail,
     });
+    showStatus('이미지가 갤러리에서 삭제되었습니다.');
+  };
+
+  // Remove old demo stock images to leave only user's uploaded images
+  const handleClearDemoImages = () => {
+    if (!editingProject) return;
+    const currentImages = editingProject.images || [];
+    // Filter out demo assets from initial bundle
+    const userOnly = currentImages.filter((img) => !img.startsWith('/src/assets/images/') && !img.includes('assets/images/'));
+    const finalCover = userOnly.length > 0 ? userOnly[0] : (editingProject.thumbnailUrl && !editingProject.thumbnailUrl.includes('assets/images/') ? editingProject.thumbnailUrl : '');
+    
+    setEditingProject({
+      ...editingProject,
+      images: userOnly,
+      thumbnailUrl: finalCover,
+    });
+    showStatus('기존 샘플 이미지가 모두 제거되었습니다. 이제 내 컴퓨터 사진만 유지됩니다.');
   };
 
   const toggleTool = (toolName: string) => {
@@ -197,33 +257,33 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     });
   };
 
-  const handleSaveProjectForm = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveProjectForm = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!editingProject?.title || !editingProject.client) {
       alert('프로젝트 제목과 클라이언트명을 입력해주세요.');
       return;
     }
 
     const currentImages = editingProject.images || [];
-    const finalThumbnail = editingProject.thumbnailUrl || (currentImages.length > 0 ? currentImages[0] : '/src/assets/images/hero_studio_showreel_1792465366310.jpg');
+    const finalThumbnail = editingProject.thumbnailUrl || (currentImages.length > 0 ? currentImages[0] : '');
 
     const fullProj: Project = {
       ...(editingProject as Project),
       thumbnailUrl: finalThumbnail,
-      images: currentImages.length > 0 ? currentImages : [finalThumbnail],
+      images: currentImages.length > 0 ? currentImages : (finalThumbnail ? [finalThumbnail] : []),
       tools: (editingProject.tools && editingProject.tools.length > 0) ? editingProject.tools : ['프리미어프로'],
       directRole: (editingProject.directRole && editingProject.directRole.length > 0) ? editingProject.directRole : ['컷 편집'],
     };
 
+    let updatedList: Project[];
     if (isEditingNew) {
-      const updated = [fullProj, ...projects];
-      onSaveProjects(updated);
-      showStatus('새 프로젝트가 등록되었습니다.');
+      updatedList = [fullProj, ...projects];
     } else {
-      const updated = projects.map((p) => (p.id === fullProj.id ? fullProj : p));
-      onSaveProjects(updated);
-      showStatus('프로젝트 수정 사항이 저장되었습니다.');
+      updatedList = projects.map((p) => (p.id === fullProj.id ? fullProj : p));
     }
+
+    onSaveProjects(updatedList);
+    showStatus(`'${fullProj.title}' 프로젝트와 이미지가 웹사이트에 즉시 반영되었습니다!`);
 
     setEditingProject(null);
     setIsEditingNew(false);
@@ -247,6 +307,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/90 backdrop-blur-md overflow-y-auto">
+      {/* Hidden single file input for quick image change from list view */}
+      <input
+        ref={quickFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleQuickImageSelected}
+        className="hidden"
+      />
+
       <div className="relative w-full max-w-4xl bg-[#0e1015] border border-white/[0.1] rounded-xl shadow-2xl overflow-hidden my-6 text-neutral-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-[#12141a]">
@@ -284,7 +353,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   관리자 비밀번호 인증
                 </h4>
                 <p className="text-xs text-neutral-400">
-                  컴퓨터 이미지 업로드, 프로젝트 추가, 수정 및 삭제 권한을 부여합니다.
+                  컴퓨터 이미지 업로드, 대표 썸네일 변경, 프로젝트 등록 및 관리가 가능합니다.
                 </p>
                 <div className="text-xs text-[#e5b964] font-mono-nums pt-1 font-semibold">
                   (기본 비밀번호: 1111)
@@ -310,7 +379,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-[#e5b964] hover:bg-[#f2c776] text-black font-bold text-xs rounded transition-colors cursor-pointer"
+                  className="w-full py-2.5 bg-[#e5b964] hover:bg-[#f2c776] text-black font-bold text-xs rounded transition-colors cursor-pointer shadow-md"
                 >
                   로그인 및 관리자 진입
                 </button>
@@ -320,15 +389,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             /* Authenticated Admin Management Interface */
             <div className="space-y-6">
               {/* Top Bar with Logout & Status */}
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-white/[0.08] gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-white">포트폴리오 프로젝트 관리</span>
+                  <span className="text-xs font-semibold text-white">포트폴리오 프로젝트 & 이미지 관리</span>
                   <span className="text-xs text-neutral-500 font-mono-nums">({projects.length}개)</span>
                 </div>
 
                 <div className="flex items-center gap-3">
+                  {isProcessingImages && (
+                    <div className="flex items-center gap-1.5 text-xs text-[#e5b964]">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>이미지 최적화 중...</span>
+                    </div>
+                  )}
                   {statusMessage && (
-                    <span className="text-xs text-[#e5b964] font-semibold animate-pulse">
+                    <span className="text-xs text-[#e5b964] font-semibold bg-[#e5b964]/10 px-2.5 py-1 rounded border border-[#e5b964]/30 animate-in fade-in">
                       {statusMessage}
                     </span>
                   )}
@@ -343,21 +418,202 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
               {/* Editing Project Form */}
               {editingProject ? (
-                <form onSubmit={handleSaveProjectForm} className="space-y-5 bg-[#12141a] p-6 rounded-xl border border-white/[0.08]">
+                <form onSubmit={handleSaveProjectForm} className="space-y-6 bg-[#12141a] p-6 rounded-xl border border-white/[0.08]">
                   <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
                     <div className="flex items-center gap-2">
                       <Film className="w-4 h-4 text-[#e5b964]" />
                       <h4 className="font-bold text-white text-sm">
-                        {isEditingNew ? '새 프로젝트 추가' : `'${editingProject.title}' 프로젝트 수정`}
+                        {isEditingNew ? '새 프로젝트 등록' : `'${editingProject.title}' 프로젝트 & 이미지 수정`}
                       </h4>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingProject(null)}
-                      className="text-xs text-neutral-400 hover:text-white cursor-pointer"
-                    >
-                      취소
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSaveProjectForm()}
+                        className="px-3.5 py-1.5 bg-[#e5b964] hover:bg-[#f2c776] text-black font-bold text-xs rounded transition-colors cursor-pointer shadow-sm flex items-center gap-1"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>즉시 저장</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingProject(null)}
+                        className="text-xs text-neutral-400 hover:text-white cursor-pointer px-2 py-1"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 1. REPRESENTATIVE COVER THUMBNAIL SHOWCASE (CRITICAL) */}
+                  <div className="p-4 rounded-xl bg-[#0a0c10] border border-[#e5b964]/30 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Star className="w-4 h-4 text-[#e5b964] fill-[#e5b964]" />
+                          <span>현재 대표 썸네일 (사이트 메인 & 포트폴리오 카드에 노출)</span>
+                        </div>
+                        <p className="text-[11px] text-neutral-400 mt-0.5">
+                          내 컴퓨터에서 새 사진을 올리면 이 대표 썸네일에 <strong>즉시 자동 반영</strong>됩니다.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isProcessingImages}
+                          className="px-4 py-2 bg-[#e5b964] hover:bg-[#f2c776] text-black text-xs font-bold rounded flex items-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
+                        >
+                          <Camera className="w-4 h-4" />
+                          <span>내 컴퓨터에서 사진 올리기</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Hidden Multiple File Input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleFilesUpload}
+                      className="hidden"
+                    />
+
+                    {/* Active Cover Preview Box */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center pt-1">
+                      <div className="md:col-span-5 relative aspect-video rounded-lg overflow-hidden border-2 border-[#e5b964] bg-black shadow-lg group">
+                        {editingProject.thumbnailUrl ? (
+                          <>
+                            <img
+                              src={editingProject.thumbnailUrl}
+                              alt="Representative Cover"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2 left-2 bg-[#e5b964] text-black text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
+                              <Star className="w-3 h-3 fill-black" />
+                              <span>현재 대표 썸네일로 적용됨</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-neutral-500 space-y-1 p-4 text-center">
+                            <ImageIcon className="w-8 h-8 text-neutral-600" />
+                            <span className="text-xs text-neutral-400">등록된 대표 이미지가 없습니다.</span>
+                            <span className="text-[10px] text-neutral-500">'내 컴퓨터에서 사진 올리기'를 클릭하세요.</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="md:col-span-7 space-y-2 text-xs text-neutral-300">
+                        <div className="p-3 bg-[#12141a] rounded-lg border border-white/[0.06] space-y-1.5">
+                          <div className="font-semibold text-white flex items-center gap-1 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#e5b964]" />
+                            <span>자동 크기 최적화 및 고화질 압축 지원</span>
+                          </div>
+                          <p className="text-[11px] text-neutral-400 leading-relaxed">
+                            스마트폰이나 카메라 원본 사진(최대 20MB)을 선택해도 브라우저 내에서 고화질 1080p로 즉시 최적화되어 용량 초과 없이 안전하게 저장 및 반영됩니다.
+                          </p>
+                        </div>
+
+                        {editingProject.images && editingProject.images.length > 0 && (
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[11px] text-neutral-400 font-mono-nums">
+                              총 {editingProject.images.length}장의 사진이 등록되어 있습니다.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleClearDemoImages}
+                              className="text-[11px] text-neutral-400 hover:text-rose-400 transition-colors underline cursor-pointer"
+                            >
+                              기존 샘플 사진 지우기
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Attached Gallery Images List */}
+                    {editingProject.images && editingProject.images.length > 0 && (
+                      <div className="pt-3 border-t border-white/[0.08] space-y-2">
+                        <div className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
+                          <span>스틸컷 갤러리 목록 (클릭하여 대표 썸네일 변경 또는 삭제):</span>
+                          <span className="text-[11px] text-[#e5b964] font-normal">
+                            ★ 별표 버튼을 누르면 해당 사진이 대표 썸네일로 바뀝니다.
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                          {editingProject.images.map((img, idx) => {
+                            const isCover = editingProject.thumbnailUrl === img || (!editingProject.thumbnailUrl && idx === 0);
+                            return (
+                              <div
+                                key={idx}
+                                className={`relative aspect-video rounded-lg overflow-hidden border bg-black group transition-all ${
+                                  isCover
+                                    ? 'border-[#e5b964] ring-2 ring-[#e5b964]/50'
+                                    : 'border-white/[0.1] hover:border-white/40'
+                                }`}
+                              >
+                                <img
+                                  src={img}
+                                  alt={`Gallery ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+
+                                {/* Cover indicator badge */}
+                                {isCover ? (
+                                  <div className="absolute top-1 left-1 bg-[#e5b964] text-black text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow">
+                                    <Star className="w-2.5 h-2.5 fill-black" />
+                                    <span>대표</span>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCoverImage(img)}
+                                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-[10px] text-white font-semibold cursor-pointer"
+                                  >
+                                    <Star className="w-4 h-4 text-[#e5b964]" />
+                                    <span>대표로 지정</span>
+                                  </button>
+                                )}
+
+                                {/* Delete button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveImage(idx);
+                                  }}
+                                  title="이미지 삭제"
+                                  className="absolute top-1 right-1 p-1 bg-black/80 hover:bg-rose-500 text-white rounded transition-colors opacity-0 group-hover:opacity-100 cursor-pointer shadow"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Optional URL input fallback */}
+                    <div className="pt-2 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={manualImageUrl}
+                        onChange={(e) => setManualImageUrl(e.target.value)}
+                        placeholder="외부 웹 이미지 URL 주소로도 추가 가능 (선택 사항)"
+                        className="flex-1 px-3 py-1.5 bg-[#13151c] border border-white/[0.08] rounded text-xs text-white focus:outline-none focus:border-[#e5b964]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddManualImage}
+                        className="px-3 py-1.5 bg-white/[0.08] hover:bg-white/[0.15] text-xs text-white rounded transition-colors whitespace-nowrap cursor-pointer"
+                      >
+                        URL 추가
+                      </button>
+                    </div>
                   </div>
 
                   {/* Title & Client */}
@@ -371,7 +627,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         required
                         value={editingProject.title || ''}
                         onChange={(e) => setEditingProject({ ...editingProject, title: e.target.value })}
-                        placeholder="예: VELOS — Sound in Motion 브랜드 필름"
+                        placeholder="예: 네이버 쇼핑라이브 & 숏츠 하이라이트 편집"
                         className="w-full px-3 py-2 bg-[#0e1015] border border-white/[0.1] rounded text-sm text-white focus:outline-none focus:border-[#e5b964]"
                       />
                     </div>
@@ -385,7 +641,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         required
                         value={editingProject.client || ''}
                         onChange={(e) => setEditingProject({ ...editingProject, client: e.target.value })}
-                        placeholder="예: VELOS Audio Lab"
+                        placeholder="예: 네이버 1784 라이브커머스제작팀"
                         className="w-full px-3 py-2 bg-[#0e1015] border border-white/[0.1] rounded text-sm text-white focus:outline-none focus:border-[#e5b964]"
                       />
                     </div>
@@ -398,14 +654,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         카테고리
                       </label>
                       <select
-                        value={editingProject.category || 'Brand Film / CF'}
+                        value={editingProject.category || 'Short-form / YouTube'}
                         onChange={(e) => setEditingProject({ ...editingProject, category: e.target.value as Project['category'] })}
                         className="w-full px-3 py-2 bg-[#0e1015] border border-white/[0.1] rounded text-sm text-white focus:outline-none focus:border-[#e5b964]"
                       >
+                        <option value="Short-form / YouTube">Short-form / YouTube</option>
                         <option value="Brand Film / CF">Brand Film / CF</option>
                         <option value="Motion & 3D">Motion & 3D</option>
                         <option value="Documentary / Interview">Documentary / Interview</option>
-                        <option value="Short-form / YouTube">Short-form / YouTube</option>
                       </select>
                     </div>
 
@@ -417,7 +673,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         type="text"
                         value={editingProject.year || ''}
                         onChange={(e) => setEditingProject({ ...editingProject, year: e.target.value })}
-                        placeholder="2024"
+                        placeholder="2026"
                         className="w-full px-3 py-2 bg-[#0e1015] border border-white/[0.1] rounded text-sm text-white focus:outline-none focus:border-[#e5b964]"
                       />
                     </div>
@@ -430,135 +686,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         type="text"
                         value={editingProject.duration || ''}
                         onChange={(e) => setEditingProject({ ...editingProject, duration: e.target.value })}
-                        placeholder="01:15"
+                        placeholder="00:58"
                         className="w-full px-3 py-2 bg-[#0e1015] border border-white/[0.1] rounded text-sm text-white focus:outline-none focus:border-[#e5b964]"
                       />
-                    </div>
-                  </div>
-
-                  {/* MULTI-IMAGE UPLOADER FROM LOCAL COMPUTER (요청 5번 사항) */}
-                  <div className="space-y-3 pt-2 pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <label className="block text-xs font-semibold text-white flex items-center gap-1.5">
-                          <ImageIcon className="w-4 h-4 text-[#e5b964]" />
-                          <span>포트폴리오 이미지 (내 컴퓨터에서 여러 장 첨부 가능)</span>
-                        </label>
-                        <p className="text-[11px] text-neutral-400">
-                          내 컴퓨터에 있는 이미지 파일을 여러 개 선택하여 업로드할 수 있습니다. 등록된 사진 중 원하는 이미지를 '대표 썸네일'로 지정하세요.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-3.5 py-1.5 bg-[#e5b964] hover:bg-[#f2c776] text-black text-xs font-bold rounded flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-sm"
-                      >
-                        <UploadCloud className="w-4 h-4" />
-                        <span>컴퓨터에서 이미지 올리기</span>
-                      </button>
-                    </div>
-
-                    {/* Hidden Multiple File Input */}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleFilesUpload}
-                      className="hidden"
-                    />
-
-                    {/* Image Gallery Grid Preview */}
-                    {editingProject.images && editingProject.images.length > 0 ? (
-                      <div className="space-y-2">
-                        <div className="text-[11px] text-neutral-400 flex items-center justify-between">
-                          <span>총 {editingProject.images.length}장의 이미지가 등록되었습니다. (★ 별표를 클릭해 대표 썸네일을 지정하세요)</span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                          {editingProject.images.map((img, idx) => {
-                            const isCover = editingProject.thumbnailUrl === img || (!editingProject.thumbnailUrl && idx === 0);
-                            return (
-                              <div
-                                key={idx}
-                                className={`relative aspect-video rounded-lg overflow-hidden border bg-black group transition-all ${
-                                  isCover
-                                    ? 'border-[#e5b964] ring-2 ring-[#e5b964]/40'
-                                    : 'border-white/[0.1] hover:border-white/30'
-                                }`}
-                              >
-                                <img
-                                  src={img}
-                                  alt={`Preview ${idx + 1}`}
-                                  className="w-full h-full object-cover"
-                                />
-
-                                {/* Cover Badge */}
-                                {isCover && (
-                                  <div className="absolute top-1.5 left-1.5 bg-[#e5b964] text-black text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow">
-                                    <Star className="w-2.5 h-2.5 fill-black" />
-                                    <span>대표 썸네일</span>
-                                  </div>
-                                )}
-
-                                {/* Action overlays */}
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                                  {!isCover && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSetCoverImage(img)}
-                                      title="대표 썸네일로 설정"
-                                      className="p-1.5 bg-black/80 text-[#e5b964] hover:bg-[#e5b964] hover:text-black rounded transition-colors cursor-pointer"
-                                    >
-                                      <Star className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveImage(idx)}
-                                    title="이미지 삭제"
-                                    className="p-1.5 bg-black/80 text-rose-400 hover:bg-rose-500 hover:text-white rounded transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-white/[0.15] hover:border-[#e5b964]/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-[#13151c]/50 space-y-2"
-                      >
-                        <UploadCloud className="w-8 h-8 text-[#e5b964] mx-auto opacity-80" />
-                        <div className="text-xs text-white font-medium">
-                          여기를 클릭하여 내 컴퓨터에서 이미지 파일을 선택하세요.
-                        </div>
-                        <div className="text-[11px] text-neutral-500">
-                          JPG, PNG, WebP 등 여러 장 동시 선택 가능
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Optional Web URL Input Fallback */}
-                    <div className="pt-2 border-t border-white/[0.06] flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={manualImageUrl}
-                        onChange={(e) => setManualImageUrl(e.target.value)}
-                        placeholder="외부 웹 이미지 URL 주소로도 추가 가능"
-                        className="flex-1 px-3 py-1.5 bg-[#13151c] border border-white/[0.08] rounded text-xs text-white focus:outline-none focus:border-[#e5b964]"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddManualImage}
-                        className="px-3 py-1.5 bg-white/[0.08] hover:bg-white/[0.15] text-xs text-white rounded transition-colors whitespace-nowrap cursor-pointer"
-                      >
-                        URL 추가
-                      </button>
                     </div>
                   </div>
 
@@ -586,7 +716,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         type="text"
                         value={editingProject.summary || ''}
                         onChange={(e) => setEditingProject({ ...editingProject, summary: e.target.value })}
-                        placeholder="하이엔드 프리미엄 무선 오디오 런칭 캠페인 시네마틱 필름"
+                        placeholder="네이버 1784 라이브커머스 방송 현장 보조 및 모바일 숏폼(숏츠) 하이라이트 편집"
                         className="w-full px-3 py-2 bg-[#0e1015] border border-white/[0.1] rounded text-sm text-white focus:outline-none focus:border-[#e5b964]"
                       />
                     </div>
@@ -632,7 +762,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </div>
                   </div>
 
-                  {/* DIRECT ROLES (NO AUDIO MIXING) */}
+                  {/* DIRECT ROLES */}
                   <div className="space-y-2">
                     <label className="block text-xs text-neutral-400">
                       직접 작업한 영역 (Role)
@@ -720,22 +850,23 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 text-xs font-bold text-black bg-[#e5b964] rounded hover:bg-[#f2c776] transition-colors cursor-pointer shadow-md"
+                      disabled={isProcessingImages}
+                      className="px-6 py-2.5 text-xs font-bold text-black bg-[#e5b964] rounded hover:bg-[#f2c776] transition-colors cursor-pointer shadow-md disabled:opacity-50"
                     >
-                      저장 완료
+                      저장 완료 및 포트폴리오 즉시 반영
                     </button>
                   </div>
                 </form>
               ) : (
                 /* Projects List */
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-neutral-400 font-mono-nums">
-                      등록된 프로젝트를 수정하거나 내 컴퓨터에서 이미지를 추가하세요.
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#13151c] p-3.5 rounded-lg border border-white/[0.06]">
+                    <div className="text-xs text-neutral-300">
+                      <strong className="text-white">빠른 사진 교체:</strong> 각 프로젝트의 <span className="text-[#e5b964] font-semibold">'사진 변경'</span> 버튼을 누르면 내 컴퓨터 사진이 즉시 대표 이미지로 교체됩니다.
                     </div>
                     <button
                       onClick={handleOpenAddProject}
-                      className="px-4 py-2 text-xs font-bold text-black bg-[#e5b964] rounded hover:bg-[#f2c776] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      className="px-4 py-2 text-xs font-bold text-black bg-[#e5b964] rounded hover:bg-[#f2c776] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0 self-start sm:self-auto"
                     >
                       <Plus className="w-4 h-4" />
                       <span>새 프로젝트 추가</span>
@@ -749,11 +880,22 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                         className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-white/[0.02] transition-colors"
                       >
                         <div className="flex items-center gap-4">
-                          <img
-                            src={item.thumbnailUrl || (item.images && item.images[0])}
-                            alt={item.title}
-                            className="w-16 h-10 object-cover rounded bg-black shrink-0 border border-white/10"
-                          />
+                          <div className="relative w-20 h-12 rounded overflow-hidden bg-black shrink-0 border border-white/20 group">
+                            <img
+                              src={item.thumbnailUrl || (item.images && item.images[0]) || '/src/assets/images/hero_studio_showreel_1792465366310.jpg'}
+                              alt={item.title}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleTriggerQuickUpload(item.id)}
+                              title="사진 바로 변경"
+                              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[#e5b964] cursor-pointer"
+                            >
+                              <Camera className="w-4 h-4" />
+                            </button>
+                          </div>
+
                           <div>
                             <div className="flex items-center gap-2">
                               <h5 className="font-bold text-white text-sm">
@@ -765,8 +907,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 </span>
                               )}
                               {item.images && item.images.length > 1 && (
-                                <span className="text-[10px] bg-white/10 text-neutral-300 px-1.5 py-0.2 rounded">
-                                  이미지 {item.images.length}장
+                                <span className="text-[10px] bg-white/10 text-neutral-300 px-1.5 py-0.2 rounded font-mono-nums">
+                                  사진 {item.images.length}장
                                 </span>
                               )}
                             </div>
@@ -776,7 +918,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          {/* Direct Quick Photo Change Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerQuickUpload(item.id)}
+                            className="px-2.5 py-1.5 text-xs font-semibold bg-[#e5b964]/15 hover:bg-[#e5b964] text-[#e5b964] hover:text-black border border-[#e5b964]/40 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            title="내 컴퓨터 사진으로 즉시 교체"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>사진 변경</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => onSelectProjectPreview(item)}
@@ -791,8 +944,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               setIsEditingNew(false);
                               setEditingProject(item);
                             }}
-                            title="수정하기"
-                            className="p-2 text-[#e5b964] hover:bg-[#e5b964]/10 rounded transition-colors cursor-pointer"
+                            title="전체 내용 및 갤러리 수정"
+                            className="p-2 text-white hover:bg-white/[0.1] rounded transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>

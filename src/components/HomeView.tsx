@@ -204,7 +204,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 {/* Media Preview Frame */}
                 <div className="relative aspect-video w-full overflow-hidden bg-black">
                   <img
-                    src={project.thumbnailUrl || (project.images && project.images[0]) || '/src/assets/images/hero_studio_showreel_1792465366310.jpg'}
+                    src={project.thumbnailUrl || (project.images && project.images[0]) || '/assets/aistudio/___26c72ec4.png'}
                     alt={project.title}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-104"
